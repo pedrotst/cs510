@@ -1,0 +1,97 @@
+==1897570== depAnalysis, the minimal Valgrind tool
+==1897570== Copyright (C) 2002-2017, and GNU GPL'd, by Nicholas Nethercote.
+==1897570== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
+==1897570== Command: test1
+==1897570== 
+--1897570-- WARNING: unhandled amd64-linux syscall: 334
+--1897570-- You may be able to write your own handler.
+--1897570-- Read the file README_MISSING_SYSCALL_OR_IOCTL.
+--1897570-- Nevertheless we consider this a bug.  Please report
+--1897570-- it at http://valgrind.org/support/bug_reports.html.
+
+IR SANITY CHECK FAILURE
+
+IRSB {
+   t0:I64   t1:I32   t2:I32   t3:I32   t4:I64   t5:I64   t6:I64   t7:I32
+   t8:I32   t9:I64   t10:I32   t11:I64   t12:I64   t13:I1   t14:I64   t15:I64
+   t16:I64   t17:I64   t18:I64   t19:I64   t20:I64   t21:I32   t22:I64   t23:I64
+   t24:I1   t25:I32   t26:I1   
+
+   ------ IMark(0x4986980, 4, 0) ------
+   PUT(184) = 0x4986984:I64
+   ------ IMark(0x4986984, 8, 0) ------
+   t5 = GET:I64(208)
+   t4 = Add64(0x18:I64,t5)
+   DIRTY 1:I1 ::: ta_ld[rp=2]{0x580011a0}()
+   t7 = LDle:I32(t4)
+   t20 = 32Uto64(t7)
+   PUT(16) = t20
+   ------ IMark(0x498698C, 2, 0) ------
+   t21 = 64to32(t20)
+   PUT(144) = 0x13:I64
+   t22 = 32Uto64(t21)
+   PUT(152) = t22
+   PUT(160) = 0x0:I64
+   PUT(168) = 0x0:I64
+   PUT(184) = 0x498698E:I64
+   ------ IMark(0x498698E, 2, 0) ------
+   t25 = 64to32(t22)
+   t24 = CmpEQ32(t25,0x0:I32)
+   t23 = 1Uto64(t24)
+   t26 = 64to1(t23)
+   if (t26) { PUT(184) = 0x4986990:I64; exit-Boring } 
+   PUT(184) = 0x49869A0:I64; exit-Boring
+}
+
+IN STATEMENT:
+
+DIRTY 1:I1 ::: ta_ld[rp=2]{0x580011a0}()
+
+ERROR = IRStmt.Dirty: ill-formed
+
+
+vex: the `impossible' happened:
+   sanityCheckFail: exiting due to bad IR
+vex storage: T total 85150360 bytes allocated
+vex storage: P total 512 bytes allocated
+
+valgrind: the 'impossible' happened:
+   LibVEX called failure_exit().
+
+host stacktrace:
+==1897570==    at 0x5806FE7A: show_sched_status_wrk (m_libcassert.c:406)
+==1897570==    by 0x5806FFA7: report_and_quit (m_libcassert.c:477)
+==1897570==    by 0x58070210: vgPlain_core_panic_at (m_libcassert.c:553)
+==1897570==    by 0x58070240: vgPlain_core_panic (m_libcassert.c:563)
+==1897570==    by 0x5807D80A: failure_exit (m_translate.c:761)
+==1897570==    by 0x580F31F0: vpanic (main_util.c:253)
+==1897570==    by 0x580F8C8B: sanityCheckFail (ir_defs.c:4502)
+==1897570==    by 0x580FE099: sanityCheckIRSB (ir_defs.c:5233)
+==1897570==    by 0x580F0740: LibVEX_FrontEnd (main_main.c:709)
+==1897570==    by 0x580F0BC0: LibVEX_Translate (main_main.c:1235)
+==1897570==    by 0x5807FFC1: vgPlain_translate (m_translate.c:1830)
+==1897570==    by 0x5804C3E9: vgPlain_scheduler (scheduler.c:1141)
+==1897570==    by 0x580A8700: run_a_thread_NORETURN (syswrap-linux.c:101)
+
+sched status:
+  running_tid=1
+
+Thread 1: status = VgTs_Runnable (lwpid 1897570)
+==1897570==    at 0x4986980: read (read.c:25)
+==1897570==    by 0x1091EA: main (test1.c:14)
+client stack range: [0x1FFEFFE000 0x1FFF000FFF] client SP: 0x1FFF000118
+valgrind stack range: [0x10033B0000 0x10034AFFFF] top usage: 18856 of 1048576
+
+
+Note: see also the FAQ in the source distribution.
+It contains workarounds to several common problems.
+In particular, if Valgrind aborted or crashed after
+identifying problems in your program, there's a good chance
+that fixing those problems will prevent Valgrind aborting or
+crashing, especially if it happened in m_mallocfree.c.
+
+If that doesn't help, please report this bug to: www.valgrind.org
+
+In the bug report, send all the above text, the valgrind
+version, and what OS and version you are using.  Thanks.
+
