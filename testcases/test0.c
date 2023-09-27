@@ -1,6 +1,8 @@
-int fd1, fd2;
-char c;
-
 int main () {
+
+    int x;
+
+    x = 1 + 37;
+
     return 0;
 }
