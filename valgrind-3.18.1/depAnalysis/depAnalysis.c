@@ -199,39 +199,10 @@ static void da_print_debug_usage(void)
   ("    (none)\n");
 }
 
-// static Bool get_shadow_mem(Addr addr){
-//   Int up = (((addr)&(0xFFFF0000)) >> 16);
-//   Bool* lookup = table[up];
-//   if(lookup == NULL)
-//     return False;
-//   else{
-//     Int low = (addr)&(0x0000FFFF);
-//     return lookup[low];
-//   }
-// }
-// 
-// static void set_shadow_mem(Addr addr, Bool value){
-// 
-//   Int up = (((addr)&(0xFFFF0000)) >> 16);
-//   Int low = (addr)&(0x0000FFFF);
-// 
-//   if(table[up] == NULL){ // on-demand allocation
-//     table[up] = (Bool*)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(Bool));
-//   }
-//   table[up][low] = value;
-// }
-
 
 static void da_post_clo_init(void)
 {
-  // table = (Bool**)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(Bool*));
-  // tempshadow = (Bool*)VG_(malloc)("Temp shadlow", 0xFFFF * sizeof(Bool));
 
-  // for(int i = 0; i < 0xFFFF; i++){
-  //   table[i] = NULL;
-  //   tempshadow[i] = False;
-  // }
-  // VG_(printf)("ENTERED post_clo\n");
 }
 
 // It maybe helpful for your work
@@ -385,8 +356,6 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
 
 static void da_fini(Int exitcode)
 {
-  // VG_(free)(tempshadow);
-  // VG_(free)(table);
 
   free_read_dep_list(read_dependencies);
 
@@ -410,10 +379,12 @@ static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
     }
     if (syscallno == __NR_write)
     {
+      /*
       VG_(printf)("write( ");
       for(int i = 0; i < nargs; i++)
         VG_(printf)("0x%X, ", args[i]);
       VG_(printf)(" )\n");
+      */
       write_n++;
     }
   }
