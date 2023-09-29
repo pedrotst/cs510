@@ -44,8 +44,121 @@ static Bool trace = False;
 static HChar *trace_file_name = "output.res"; /* default output file name unless denoted */
 static VgFile *fp = NULL;
 
-static Bool** table;
-static Bool* tempshadow;
+// static Bool** table;
+// static Bool* tempshadow;
+
+static int write_n = 0;
+static int read_n = 0;
+// Node structure
+typedef struct node_s {
+    int value;
+    struct node_s* next;
+} int_node;
+
+int_node* int_list_create(int value) {
+    int_node* new_node = (int_node*)VG_(malloc)("Read Number Node", sizeof(int_node));
+    if (!new_node) {
+        return NULL; 
+    }
+    new_node->value = value;
+    new_node->next = NULL;
+    return new_node;
+}
+
+int_node* int_list_append(int_node* head, int value) {
+    int_node* new_node = int_list_create(value);
+    if (!new_node) {
+        return head;  // Return existing list if we failed to create a new node
+    }
+
+    if (!head) {
+        return new_node;  // New node becomes the list if list was empty
+    }
+
+    int_node* temp = head;
+    while (temp->next) {
+        temp = temp->next;
+    }
+    temp->next = new_node;
+    return head;
+}
+
+void free_int_node_list(int_node* head) {
+    int_node* temp;
+    while (head) {
+        temp = head;
+        head = head->next;
+        VG_(free)(temp);
+    }
+}
+
+typedef enum {
+  k_word, // memory address
+  k_temp // temporary value
+} dep_kind;
+
+typedef 
+  struct dep_val_s {
+    dep_kind tag;
+    union {
+      UWord mem_addr;
+      IRTemp temp;
+    } val;
+    
+} dep_val;
+
+// Initialize with memory address
+dep_val init_dep_val_with_mem_addr(UWord mem_addr) {
+    dep_val value;
+    value.tag = k_word;
+    value.val.mem_addr = mem_addr;
+    return value;
+}
+
+// Initialize with temporary value
+dep_val init_dep_val_with_temp(IRTemp temp) {
+    dep_val value;
+    value.tag = k_temp;
+    value.val.temp = temp;
+    return value;
+}
+
+typedef struct read_dep_s {
+  struct read_dep_s *next;
+  dep_val val;
+  int_node *read_deps;
+} read_dep_node;
+
+read_dep_node* create_read_dep_node(dep_val val, int *read_deps){
+  read_dep_node* new_node = (read_dep_node*)VG_(malloc)("Dependency node", sizeof(read_dep_node));
+  new_node->val = val;
+  new_node->read_deps = read_deps;
+
+  return(new_node);
+}
+
+// Function to add an element to the list (backwards)
+read_dep_node* add_to_read_dep_list(read_dep_node* head, dep_val dependency, int *read_deps) {
+    // Allocate memory for new element
+    read_dep_node* new_node = create_read_dep_node(dependency, read_deps);
+    new_node->next = head;
+
+    return new_node;
+}
+
+// Function to free the read_dep_node list
+void free_read_dep_list(read_dep_node* head) {
+    read_dep_node* temp;
+    while (head) {
+        free_int_node_list(head->read_deps);  // free the int_node list
+        temp = head;
+        head = head->next;
+        VG_(free)(temp);
+    }
+}
+
+
+static read_dep_node *read_dependencies = NULL;
 
 static void instrument_load_statement(Addr pc, Addr addr)
 {
@@ -86,38 +199,38 @@ static void da_print_debug_usage(void)
   ("    (none)\n");
 }
 
-static Bool get_shadow_mem(Addr addr){
-  Int up = (((addr)&(0xFFFF0000)) >> 16);
-  Bool* lookup = table[up];
-  if(lookup == NULL)
-    return False;
-  else{
-    Int low = (addr)&(0x0000FFFF);
-    return lookup[low];
-  }
-}
-
-static void set_shadow_mem(Addr addr, Bool value){
-
-  Int up = (((addr)&(0xFFFF0000)) >> 16);
-  Int low = (addr)&(0x0000FFFF);
-
-  if(table[up] == NULL){ // on-demand allocation
-    table[up] = (Bool*)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(Bool));
-  }
-  table[up][low] = value;
-}
+// static Bool get_shadow_mem(Addr addr){
+//   Int up = (((addr)&(0xFFFF0000)) >> 16);
+//   Bool* lookup = table[up];
+//   if(lookup == NULL)
+//     return False;
+//   else{
+//     Int low = (addr)&(0x0000FFFF);
+//     return lookup[low];
+//   }
+// }
+// 
+// static void set_shadow_mem(Addr addr, Bool value){
+// 
+//   Int up = (((addr)&(0xFFFF0000)) >> 16);
+//   Int low = (addr)&(0x0000FFFF);
+// 
+//   if(table[up] == NULL){ // on-demand allocation
+//     table[up] = (Bool*)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(Bool));
+//   }
+//   table[up][low] = value;
+// }
 
 
 static void da_post_clo_init(void)
 {
-  table = (Bool**)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(Bool*));
-  tempshadow = (Bool*)VG_(malloc)("Temp shadlow", 0xFFFF * sizeof(Bool));
+  // table = (Bool**)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(Bool*));
+  // tempshadow = (Bool*)VG_(malloc)("Temp shadlow", 0xFFFF * sizeof(Bool));
 
-  for(int i = 0; i < 0xFFFF; i++){
-    table[i] = NULL;
-    tempshadow[i] = False;
-  }
+  // for(int i = 0; i < 0xFFFF; i++){
+  //   table[i] = NULL;
+  //   tempshadow[i] = False;
+  // }
   // VG_(printf)("ENTERED post_clo\n");
 }
 
@@ -256,12 +369,13 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
     }
     addStmtToIRSB(sbOut, st);
 
+    /*
     if (trace)
     {
       ppIRStmt(st);
-      VG_(printf)
-      ("\n");
+      VG_(printf)("\n");
     }
+    */
   }
   return sbOut;
 }
@@ -271,10 +385,13 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
 
 static void da_fini(Int exitcode)
 {
-  VG_(free)(tempshadow);
-  VG_(free)(table);
+  // VG_(free)(tempshadow);
+  // VG_(free)(table);
+
+  free_read_dep_list(read_dependencies);
 
   VG_(fclose)(fp);
+  VG_(printf)("We are done");
 }
 
 static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
@@ -283,11 +400,21 @@ static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
   {
     if (syscallno == __NR_read)
     {
-      // Write your code
+      /*
+      VG_(printf)("read( ");
+      for(int i = 0; i < nargs; i++)
+        VG_(printf)("0x%X, ", args[i]);
+      VG_(printf)(" )\n");
+      */
+      read_n++;
     }
     if (syscallno == __NR_write)
     {
-      // Write your code
+      VG_(printf)("write( ");
+      for(int i = 0; i < nargs; i++)
+        VG_(printf)("0x%X, ", args[i]);
+      VG_(printf)(" )\n");
+      write_n++;
     }
   }
 }
@@ -326,8 +453,7 @@ static void da_pre_clo_init(void)
   ();
   /* No needs, no core events to track */
 
-  VG_(needs_syscall_wrapper)
-  (ta_pre_call, ta_post_call);
+  VG_(needs_syscall_wrapper)(ta_pre_call, ta_post_call);
 }
 
 VG_DETERMINE_INTERFACE_VERSION(da_pre_clo_init)
