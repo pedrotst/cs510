@@ -1,1 +1,6 @@
 val-tools
+valgrind-3.18.1/depAnalysis/depAnalysis_amd64_linux-depAnalysis.o
+valgrind-3.18.1/depAnalysis/depAnalysis_x86_linux-depAnalysis.o
+valgrind-3.18.1/depAnalysis/depAnalysis-amd64-linux
+valgrind-3.18.1/depAnalysis/depAnalysis-x86-linux
+cs510_skeleton.zip
