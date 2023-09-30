@@ -275,9 +275,10 @@ void print_read_dep_list(read_dep_node* head) {
           VG_(printf)(" read():%d", int_list_current->value);
           int_list_current = int_list_current->next;
       }
-      current = current->next;
+
+    VG_(printf)("\n");
+    current = current->next;
   }
-  VG_(printf)("\n");
 
 }
 
@@ -516,7 +517,6 @@ static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
         VG_(printf)("0x%X, ", args[i]);
       VG_(printf)(" )\n");
       */
-      read_n++;
     }
     if (syscallno == __NR_write)
     {
