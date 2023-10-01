@@ -67,7 +67,7 @@ typedef
     dep_kind tag;
     union {
       Mem_region var;
-      IRTemp temp;
+      UInt temp;
       int write_val;
     } val;
     
@@ -93,7 +93,10 @@ static VgFile *fp = NULL;
 
 static int write_n = 0;
 static int read_n = 0;
-// Node structure
+
+// Global variable to be used when analysing the dependency of an expression
+static int_node *expr_deps = NULL;
+
 static read_dep_node *var_deps = NULL;
 static read_dep_node *write_deps = NULL;
 
@@ -198,7 +201,7 @@ dep_val init_dep_val_with_write(int writeval) {
 }
 
 // Initialize with temporary value
-dep_val init_dep_val_with_temp(IRTemp temp) {
+dep_val init_dep_val_with_temp(UInt temp) {
     dep_val value;
     value.tag = k_temp;
     value.val.temp = temp;
@@ -362,7 +365,9 @@ int_node* int_node_merge(int_node* head, int_node* l){
       // VG_(printf)("Creating a new depedency with read():%d\n", l->value);
       head = int_list_append(head, l->value);
     }
+    int_node* tmp = l;
     l = l->next;
+    VG_(free)(tmp);
   }
 
   return head;
@@ -370,9 +375,9 @@ int_node* int_node_merge(int_node* head, int_node* l){
 
 int_node* find_read_dep_by_mem_addr(UWord target_addr)
 {
-  VG_(printf)("Finding read on target: %lu\n", target_addr);
+  VG_(printf)("Finding read on target: 0x%X\n", target_addr);
   int_node *head = get_shadow_mem(target_addr);
-  VG_(printf)("Found %lu -> ", target_addr);
+  VG_(printf)("Found 0x%X -> ", target_addr);
   print_int_list(head);
   VG_(printf)("|");
   VG_(printf)("\n");
@@ -407,7 +412,7 @@ int_node* find_read_dep_by_mem_addr(UWord target_addr)
 int_node* find_read_dep_by_mem_addrs(UWord target_addr, UWord size){
   int_node *tmp = NULL;
   int_node *head = NULL;
-  VG_(printf)("Finding mem addr at %lu with size %lu\n", target_addr, size);
+  VG_(printf)("Finding mem addr at 0x%X with size %lu\n", target_addr, size);
   for (UWord i = 0; i < size; i++){
     tmp = find_read_dep_by_mem_addr(target_addr+i);
     VG_(printf)("Search is over, begin final merge\n");
@@ -420,6 +425,16 @@ int_node* find_read_dep_by_mem_addrs(UWord target_addr, UWord size){
   return head;
 }
 
+int_node* find_read_dep_tmp(UWord tmp){
+ read_dep_node *head = var_deps;
+ while(head){
+  if(head->val.tag == k_temp && head->val.val.temp == tmp){
+    return (head->read_deps);
+  }
+  head = head->next;
+ }
+ return NULL;
+}
 
 
 
@@ -429,18 +444,128 @@ int_node* find_read_dep_by_mem_addrs(UWord target_addr, UWord size){
 
 /* ============================================================================ */
 
-
-
-static void instrument_load_statement(Addr pc, Addr addr)
+static void instrument_assgn_tmp_load(UInt tmp_n, Addr addr)
 {
-  // VG_(printf)("load:%x\r\n", addr);
-  // Place your code here
+  int_node *l = get_shadow_mem(addr);
+  if (l == NULL) return;
+
+  dep_val val = init_dep_val_with_temp(tmp_n);
+  VG_(printf)("t(%u) = load:0x%X\n", tmp_n, addr);
+  l = deep_copy_int_node_list(l);
+  var_deps = read_dep_node_append(var_deps, val, l);
 }
 
-static void instrument_store_statement(Addr pc, Addr addr)
+/*
+static void instrument_load(Addr addr)
 {
-  // VG_(printf)("store: %x\r\n", addr);
-  // Place your code here
+  int_node *l = get_shadow_mem(addr);
+  if (l == NULL) return;
+
+  dep_val val = init_dep_val_with_temp(tmp_n);
+  //VG_(printf)("t(%u) = load:0x%X\n", tmp_n, addr);
+  expr_deps = deep_copy_int_node_list(l);
+  // var_deps = read_dep_node_append(var_deps, val, l);
+}
+*/
+
+static void instrument_assgn_tmp_tmp(UInt lhs_tmp, UInt rhs_tmp)
+{
+  int_node *l = find_read_dep_tmp(rhs_tmp);
+  if (l == NULL) return;
+
+  VG_(printf)("t(%u) = t(%u)\n", lhs_tmp, rhs_tmp);
+  dep_val val = init_dep_val_with_temp(lhs_tmp);
+  l = deep_copy_int_node_list(l);
+  var_deps = read_dep_node_append(var_deps, val, l);
+}
+
+int_node* get_deps_tmp(UInt tmp)
+{
+  int_node *l = find_read_dep_tmp(tmp);
+  if (l == NULL) return NULL;
+
+  return (deep_copy_int_node_list(l));
+}
+
+static void instrument_store(Addr addr, UInt tmp)
+{
+  int_node *l = get_deps_tmp(tmp);
+
+  if (l == NULL) return;
+
+  VG_(printf)("ST(%lu) = t(%u)\n", addr, tmp);
+  set_shadow_mem(addr, l);
+}
+
+
+
+int_node* get_deps_mem (Addr m)
+{
+  int_node *l = get_shadow_mem(m);
+  if (l == NULL) return NULL;
+  l = deep_copy_int_node_list(l);
+  return l;
+}
+
+int_node* *get_deps_expr(IRExpr *exp){
+  IRExpr **argv = NULL;
+  IRDirty *dirty = NULL;
+  int_node* deps = NULL;
+
+  int_node *tmp1, *tmp2, *tmp3, *tmp4;
+
+  switch (exp->tag)
+  {
+    case Iex_Binder:
+      break;
+    case Iex_Get:
+      break;
+    case Iex_GetI:
+      break;
+    case Iex_RdTmp:
+      deps = get_deps_tmp(exp->Iex.RdTmp.tmp);
+      break;
+    case Iex_Qop:
+      tmp1 = get_deps_expr(exp->Iex.Qop.details->arg1);
+      tmp2 = get_deps_expr(exp->Iex.Qop.details->arg2);
+      tmp3 = get_deps_expr(exp->Iex.Qop.details->arg3);
+      tmp4 = get_deps_expr(exp->Iex.Qop.details->arg4);
+      deps = int_node_merge(tmp1, tmp2);
+      deps = int_node_merge(deps, tmp3);
+      deps = int_node_merge(deps, tmp4);
+      break;
+    case Iex_Triop:
+      tmp1 = get_deps_expr(exp->Iex.Triop.details->arg1);
+      tmp2 = get_deps_expr(exp->Iex.Triop.details->arg2);
+      tmp3 = get_deps_expr(exp->Iex.Triop.details->arg3);
+      deps = int_node_merge(tmp1, tmp2);
+      deps = int_node_merge(deps, tmp3);
+      break;
+    case Iex_Binop:
+      tmp1 = get_deps_expr(exp->Iex.Binop.arg1);
+      tmp2 = get_deps_expr(exp->Iex.Binop.arg2);
+      deps = int_node_merge(tmp1, tmp2);
+      break;
+    case Iex_Unop:
+      deps = get_deps_expr(exp->Iex.Unop.arg);
+      break;
+    case Iex_Load:
+      // argv = mkIRExprVec_1(expr->Iex.Load.addr);
+      // dirty = unsafeIRDirty_0_N(1, "ta_ld", VG_(fnptr_to_fnentry)(instrument_load), argv);
+      // VG_(printf)("Load Instrumented\n");
+      break;
+    case Iex_ITE:
+      break;
+    case Iex_Const:
+      break;
+    case Iex_CCall:
+      break;
+    case Iex_VECRET:
+      break;
+    case Iex_GSPTR:
+      break;
+  }
+  return deps;
 }
 
 static Bool da_process_cmd_line_option(const HChar *arg)
@@ -552,7 +677,7 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
 
   for (i = 0; i < sbIn->stmts_used; i++)
   {
-
+    dirty = NULL;
     IRStmt *st = sbIn->stmts[i];
 
     if (!st || st->tag == Ist_NoOp)
@@ -561,6 +686,10 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
     switch (st->tag)
     {
     case Ist_IMark:
+
+      // Restart the count of the intermediate variables
+      free_read_dep_list(var_deps);
+      var_deps = NULL;
 
       if (VG_(get_fnname_if_entry)(ep, st->Ist.IMark.addr, &fnname))
       {
@@ -580,38 +709,56 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
       break;
       // You may want to modify this part of code
     case Ist_WrTmp:
+      if(!trace) break;
+
       data = st->Ist.WrTmp.data;
-      IRType load_type = typeOfIRExpr(sbOut->tyenv, data);
+      IRTemp tmp = st->Ist.WrTmp.tmp;
+      IRType load_type = typeOfIRExpr(tyenv, data);
 
-      if (trace && data->tag == Iex_Load)
-      {
-
-        argv = mkIRExprVec_2(PCdata, data->Iex.Load.addr);
-        dirty = unsafeIRDirty_0_N(2, "ta_ld", VG_(fnptr_to_fnentry)(instrument_load_statement), argv);
-
-        addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+      if(data->tag == Iex_Load){
+        IRExpr *e = IRExpr_Const(IRConst_U64(st->Ist.WrTmp.tmp));
+        argv = mkIRExprVec_2(e, data->Iex.Load.addr);
+        dirty = unsafeIRDirty_0_N(2, "ta_ld", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_load), argv);
       }
+      else {
+        int_node *l = get_deps_expr(data);
+        if (l != NULL){
+          VG_(printf)("found dependency with t(%d):", tmp);
+          print_int_list(l);
+
+          dep_val val = init_dep_val_with_temp(tmp);
+          var_deps = read_dep_node_append(var_deps, val, l);
+        }
+      }
+
 
       break;
 
     case Ist_Store:
+      if(!trace) break;
 
       data = st->Ist.Store.data;
+      IRExpr* addr = st->Ist.Store.addr;
 
-      IRType wrtie_type = typeOfIRExpr(tyenv, data);
+      /*
+      dirty = instrument_store(addr, data);
+      if (dirty != NULL) addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+      */
 
-      if (trace)
-      {
-        argv = mkIRExprVec_2(PCdata, st->Ist.Store.addr);
-        dirty = unsafeIRDirty_0_N(2, "ta_st", VG_(fnptr_to_fnentry)(instrument_store_statement), argv);
+      IRType write_type = typeOfIRExpr(tyenv, data);
+
+      if(addr->tag == Iex_RdTmp){
+        IRExpr *e = IRExpr_Const(IRConst_U64(addr));
+        argv = mkIRExprVec_2(addr, e);
+        dirty = unsafeIRDirty_0_N(2, "ta_st", VG_(fnptr_to_fnentry)(instrument_store), argv);
 
         addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
       }
 
       break;
+    default: break;
     }
     addStmtToIRSB(sbOut, st);
-
     /*
     if (trace)
     {
@@ -619,7 +766,11 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
       VG_(printf)("\n");
     }
     */
+
+// t(8) = load:1097761
   }
+  // VG_(printf)("Finished instrumenting\n");
+
   return sbOut;
 }
 
@@ -664,7 +815,7 @@ static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
       // dep_val val = init_dep_val_with_mem_addr(args[1], args[2]);
       // int_node *int_list = int_list_create(read_n);
       // var_deps = prepend(var_deps, val, int_list);
-      VG_(printf)("Creating read (%d) dependency for memory %lu with size %lu\n", read_n, args[1], args[2]);
+      VG_(printf)("Creating read (%d) dependency for memory 0x%X with size %lu\n", read_n, args[1], args[2]);
       for(int i = 0; i < args[2]; i++){
         int_node *int_list = int_list_create(read_n);
         // VG_(printf)("Entering loop, creating dep for mem %lu\n", args[1] + i);
