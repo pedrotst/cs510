@@ -91,14 +91,14 @@ static Bool trace = False;
 static HChar *trace_file_name = "output.res"; /* default output file name unless denoted */
 static VgFile *fp = NULL;
 
-// static Bool** table;
-// static Bool* tempshadow;
-
 static int write_n = 0;
 static int read_n = 0;
 // Node structure
 static read_dep_node *var_deps = NULL;
 static read_dep_node *write_deps = NULL;
+
+static int_node*** shadow_mem;
+
 
 
 /* ============================================================================ */
@@ -138,9 +138,10 @@ int_node* int_list_append(int_node* head, int value) {
 
 void free_int_node_list(int_node* head) {
     int_node* temp;
-    while (head) {
+    while (head != NULL) {
         temp = head;
         head = head->next;
+        // VG_(printf)("Freeing int_node %d\n", temp->value);
         VG_(free)(temp);
     }
 }
@@ -149,13 +150,43 @@ void free_int_node_list(int_node* head) {
 // Initialize with memory address
 dep_val init_dep_val_with_mem_addr(UWord mem_addr, UWord size) {
     dep_val value;
-    VG_(printf)("Creating read dependency for memory %lu with size %lu\n", mem_addr, size);
     value.tag = k_mem;
     value.val.var.mem_addr = mem_addr;
     value.val.var.size = size;
     return value;
 }
 
+/* ---------------------------- List Print functions  -------------------------- */
+
+// Print the read_deps int_node list
+void print_int_list(int_node *current){
+  // VG_(printf)("Read Dependencies: ");
+
+  while (current != NULL) {
+      VG_(printf)(" read():%d", current->value);
+      current = current->next;
+  }
+}
+
+void print_read_dep_list(read_dep_node* head) {
+  read_dep_node* current = head;
+  while (current != NULL) {
+    // Print the tag and value based on the tag type
+    if (current->val.tag == k_mem) {
+        VG_(printf)("Memory Address:%lu[%lu]", current->val.val.var.mem_addr, current->val.val.var.size);
+    } else if (current->val.tag == k_temp) {
+        VG_(printf)("Temp Value:%ud", current->val.val.temp);
+    } else if (current->val.tag == k_write) {
+        VG_(printf)("write():%d", current->val.val.write_val);
+    }
+    
+    print_int_list(current->read_deps);
+
+    VG_(printf)("\n");
+    current = current->next;
+  }
+
+}
 /* ---------------------------- dep_val functions  -------------------------- */
 
 // Initialize with write value
@@ -175,7 +206,7 @@ dep_val init_dep_val_with_temp(IRTemp temp) {
 }
 
 /* ---------------------------- dep_node function ---------------------------- */
-read_dep_node* create_read_dep_node(dep_val val, int *read_deps){
+read_dep_node* create_read_dep_node(dep_val val, int_node *read_deps){
   read_dep_node* new_node = (read_dep_node*)VG_(malloc)("Dependency node", sizeof(read_dep_node));
   new_node->val = val;
   new_node->read_deps = read_deps;
@@ -185,7 +216,7 @@ read_dep_node* create_read_dep_node(dep_val val, int *read_deps){
 }
 
 // Function to add an element to the list (backwards)
-read_dep_node *read_dep_node_prepend(read_dep_node *head, dep_val dependency, int *read_deps)
+read_dep_node *read_dep_node_prepend(read_dep_node *head, dep_val dependency, int_node *read_deps)
 {
   // Allocate memory for new element
   read_dep_node *new_node = create_read_dep_node(dependency, read_deps);
@@ -194,8 +225,8 @@ read_dep_node *read_dep_node_prepend(read_dep_node *head, dep_val dependency, in
   return new_node;
 }
 
-// Function to add an element to the list (backwards)
-read_dep_node* read_dep_node_append(read_dep_node* head, dep_val dependency, int *read_deps) {
+// Function to add an element to the list
+read_dep_node* read_dep_node_append(read_dep_node* head, dep_val dependency, int_node *read_deps) {
   read_dep_node *tmp = head;
   while(tmp != NULL && tmp->next != NULL){
     tmp = tmp->next;
@@ -249,6 +280,61 @@ read_dep_node* deep_copy_read_dep_list(read_dep_node* head) {
     return new_node;
 }
 
+static int_node* get_shadow_mem(UWord addr){
+  UWord up = (((addr)&(0xFFFF0000)) >> 16);
+  int_node **lookup = shadow_mem[up];
+  if (lookup == NULL)
+    return NULL;
+  else {
+    UWord low = (addr) & (0x0000FFFF);
+    return lookup[low];
+  }
+}
+
+// Sets the shadow mem with a deep copy of deps at addr
+static void set_shadow_mem(UWord addr, int_node *deps) { 
+  UWord up = (((addr)&(0xFFFF0000)) >> 16);
+  UWord low = (addr)&(0x0000FFFF);
+
+  if(shadow_mem[up] == NULL){ // on-demand allocation
+    shadow_mem[up] = (int_node**)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(int_node*));
+    VG_(printf)("Allocating shadow memory in i: %lu\n", up);
+    for(UWord i = 0; i < 0x0000FFFF; i++)
+      shadow_mem[up][i] = NULL;
+  }
+
+  VG_(printf)("Set shadow memory in j: %lu\n", low);
+  shadow_mem[up][low] = deps;
+}
+
+void init_shadow_mem(){
+  shadow_mem = (int_node***)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(int_node**));
+  for(int i = 0; i < 0xFFFF; i++){
+    shadow_mem[i] = NULL;
+  }
+}
+
+void free_shadow_mem(){
+  // VG_(printf)("Begin free of shadow mem\n");
+  for(UWord i = 0; i < 0x0000FFFF; i++){
+    // VG_(message)(Vg_DebugMsg, "!\n");
+    // VG_(printf)("Begin free of shadow mem i:%lu j:%lu\n", i, j);
+    if (shadow_mem[i] != NULL){
+      for(UWord j = 0; j < 0x0000FFFF; j++){
+        // VG_(message)(Vg_DebugMsg, "?");
+        // VG_(printf)("Begin free of shadow mem i:%lu j:%lu\n", i, j);
+        if(shadow_mem[i][j] != NULL)
+          free_int_node_list(shadow_mem[i][j]);
+      }
+      VG_(free)(shadow_mem[i]);
+      // VG_(printf)("Freed all index i:%lu\n", i);
+    }
+  }
+  // VG_(printf)("End free of shadow mem\n");
+  VG_(free)(shadow_mem);
+  // VG_(printf)("All Memory was Freed\n");
+}
+
 // Helper function to check if a value exists in a list
 int exists_in_int_node(int_node *head, int value)
 {
@@ -263,7 +349,7 @@ int exists_in_int_node(int_node *head, int value)
   return 0; // Value doesn't exist
 }
 
-int_node* read_dep_merge(int_node* head, int_node* l){
+int_node* int_node_merge(int_node* head, int_node* l){
   if(l == NULL) return head;
 
   // VG_(printf)("read_dep was not null\n");
@@ -281,10 +367,16 @@ int_node* read_dep_merge(int_node* head, int_node* l){
 
 int_node* find_read_dep_by_mem_addr(UWord target_addr)
 {
-  int_node* new_node = NULL;
-  read_dep_node *head = var_deps;
-  int i = 0;
+  VG_(printf)("Finding read on target: %lu\n", target_addr);
+  int_node *head = get_shadow_mem(target_addr);
+  VG_(printf)("Found %lu -> ", target_addr);
+  print_int_list(head);
+  VG_(printf)("\n");
 
+  return deep_copy_int_node_list(head);
+
+  
+  /*
   // VG_(printf)("Finding read on target: %lu\n", target_addr);
   while (head != NULL)
   {
@@ -297,7 +389,7 @@ int_node* find_read_dep_by_mem_addr(UWord target_addr)
         // VG_(printf)("Searching for read dependency in region %lu\n", memreg.mem_addr+i);
         if(memreg.mem_addr + i == target_addr){
           // VG_(printf)("Found a read dependency in region %lu\n", memreg.mem_addr+i);
-          new_node = read_dep_merge(new_node, head->read_deps);
+          new_node = int_node_merge(new_node, head->read_deps);
         }
       }
     }
@@ -305,16 +397,17 @@ int_node* find_read_dep_by_mem_addr(UWord target_addr)
     head = head->next;
   }
   return new_node;
+  */
 }
 
 int_node* find_read_dep_by_mem_addrs(UWord target_addr, UWord size){
   int_node *tmp = NULL;
   int_node *head = NULL;
   for (UWord i = 0; i < size; i++){
-    // VG_(printf)("Finding mem addr at %lu with size %lu\n", target_addr+i, size);
+    VG_(printf)("Finding mem addr at %lu with size %lu\n", target_addr+i, size);
     tmp = find_read_dep_by_mem_addr(target_addr+i);
-    // VG_(printf)("Search is over, begin final merge\n", target_addr+i, size);
-    head = read_dep_merge(head, tmp);
+    VG_(printf)("Search is over, begin final merge\n");
+    head = int_node_merge(head, tmp);
   }
   // if(head != NULL)
   //   VG_(printf)("Returning a non_empty head for find_by_mem_addres\n");
@@ -323,31 +416,8 @@ int_node* find_read_dep_by_mem_addrs(UWord target_addr, UWord size){
   return head;
 }
 
-void print_read_dep_list(read_dep_node* head) {
-  read_dep_node* current = head;
-  while (current != NULL) {
-      // Print the tag and value based on the tag type
-      if (current->val.tag == k_mem) {
-          VG_(printf)("Memory Address:0x%X", current->val.val.var);
-      } else if (current->val.tag == k_temp) {
-          VG_(printf)("Temp Value:%d", current->val.val.temp);
-      } else if (current->val.tag == k_write) {
-          VG_(printf)("write():%d", current->val.val.write_val);
-      }
-      
-      // Print the read_deps int_node list
-      // VG_(printf)("Read Dependencies: ");
-      int_node* int_list_current = current->read_deps;
-      while (int_list_current != NULL) {
-          VG_(printf)(" read():%d", int_list_current->value);
-          int_list_current = int_list_current->next;
-      }
 
-    VG_(printf)("\n");
-    current = current->next;
-  }
 
-}
 
 /* ============================================================================ */
 
@@ -399,6 +469,7 @@ static void da_print_debug_usage(void)
 
 static void da_post_clo_init(void)
 {
+  init_shadow_mem();
 
 }
 
@@ -564,6 +635,8 @@ static void da_fini(Int exitcode)
   free_read_dep_list(write_deps);
   // VG_(printf)("After frees\n");
 
+  free_shadow_mem();
+
   // VG_(printf)("Closing file file\n");
   VG_(fclose)(fp);
 }
@@ -584,9 +657,15 @@ static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
       VG_(printf)(" )\n");
       */
 
-      dep_val val = init_dep_val_with_mem_addr(args[1], args[2]);
-      int_node *int_list = int_list_create(read_n);
-      var_deps = read_dep_node_prepend(var_deps, val, int_list);
+      // dep_val val = init_dep_val_with_mem_addr(args[1], args[2]);
+      // int_node *int_list = int_list_create(read_n);
+      // var_deps = prepend(var_deps, val, int_list);
+      VG_(printf)("Creating read dependency for memory %lu with size %lu\n", args[1], args[2]);
+      for(int i = 0; i < args[2]; i++){
+        int_node *int_list = int_list_create(read_n);
+        VG_(printf)("Entering loop, creating dep for mem %lu\n", args[1] + i);
+        set_shadow_mem(args[1]+i, int_list);
+      }
     }
     if (syscallno == __NR_write)
     {
