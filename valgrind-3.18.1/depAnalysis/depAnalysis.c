@@ -298,12 +298,15 @@ static void set_shadow_mem(UWord addr, int_node *deps) {
 
   if(shadow_mem[up] == NULL){ // on-demand allocation
     shadow_mem[up] = (int_node**)VG_(malloc)("Memory shadow", 0xFFFF * sizeof(int_node*));
-    VG_(printf)("Allocating shadow memory in i: %lu\n", up);
+    // VG_(printf)("Allocating shadow memory in i: %lu\n", up);
     for(UWord i = 0; i < 0x0000FFFF; i++)
       shadow_mem[up][i] = NULL;
   }
 
-  VG_(printf)("Set shadow memory in j: %lu\n", low);
+  if(shadow_mem[up][low] != NULL){
+    free_int_node_list(shadow_mem[up][low]);
+  }
+  // VG_(printf)("Set shadow memory in j: %lu\n", low);
   shadow_mem[up][low] = deps;
 }
 
@@ -371,6 +374,7 @@ int_node* find_read_dep_by_mem_addr(UWord target_addr)
   int_node *head = get_shadow_mem(target_addr);
   VG_(printf)("Found %lu -> ", target_addr);
   print_int_list(head);
+  VG_(printf)("|");
   VG_(printf)("\n");
 
   return deep_copy_int_node_list(head);
@@ -403,8 +407,8 @@ int_node* find_read_dep_by_mem_addr(UWord target_addr)
 int_node* find_read_dep_by_mem_addrs(UWord target_addr, UWord size){
   int_node *tmp = NULL;
   int_node *head = NULL;
+  VG_(printf)("Finding mem addr at %lu with size %lu\n", target_addr, size);
   for (UWord i = 0; i < size; i++){
-    VG_(printf)("Finding mem addr at %lu with size %lu\n", target_addr+i, size);
     tmp = find_read_dep_by_mem_addr(target_addr+i);
     VG_(printf)("Search is over, begin final merge\n");
     head = int_node_merge(head, tmp);
@@ -660,10 +664,10 @@ static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
       // dep_val val = init_dep_val_with_mem_addr(args[1], args[2]);
       // int_node *int_list = int_list_create(read_n);
       // var_deps = prepend(var_deps, val, int_list);
-      VG_(printf)("Creating read dependency for memory %lu with size %lu\n", args[1], args[2]);
+      VG_(printf)("Creating read (%d) dependency for memory %lu with size %lu\n", read_n, args[1], args[2]);
       for(int i = 0; i < args[2]; i++){
         int_node *int_list = int_list_create(read_n);
-        VG_(printf)("Entering loop, creating dep for mem %lu\n", args[1] + i);
+        // VG_(printf)("Entering loop, creating dep for mem %lu\n", args[1] + i);
         set_shadow_mem(args[1]+i, int_list);
       }
     }
