@@ -54,7 +54,8 @@ typedef struct node_s {
 typedef enum {
   k_mem, // memory address
   k_temp, // temporary value
-  k_write // write
+  k_write, // write
+  k_reg
 } dep_kind;
 
 typedef struct {
@@ -69,6 +70,7 @@ typedef
       Mem_region var;
       UInt temp;
       int write_val;
+      Int reg_val;
     } val;
     
 } dep_val;
@@ -95,9 +97,8 @@ static int write_n = 0;
 static int read_n = 0;
 
 // Global variable to be used when analysing the dependency of an expression
-static int_node *expr_deps = NULL;
-
 static read_dep_node *var_deps = NULL;
+static read_dep_node *reg_deps = NULL;
 static read_dep_node *write_deps = NULL;
 
 static int_node*** shadow_mem;
@@ -166,7 +167,8 @@ void print_int_list(int_node *current){
   // VG_(printf)("Read Dependencies: ");
 
   while (current != NULL) {
-      VG_(printf)(" read():%d", current->value);
+      // VG_(printf)(" read():%d", current->value);
+      VG_(fprintf)(fp, " read():%d", current->value);
       current = current->next;
   }
 }
@@ -174,18 +176,32 @@ void print_int_list(int_node *current){
 void print_read_dep_list(read_dep_node* head) {
   read_dep_node* current = head;
   while (current != NULL) {
-    // Print the tag and value based on the tag type
-    if (current->val.tag == k_mem) {
-        VG_(printf)("Memory Address:%lu[%lu]", current->val.val.var.mem_addr, current->val.val.var.size);
-    } else if (current->val.tag == k_temp) {
-        VG_(printf)("Temp Value:%ud", current->val.val.temp);
-    } else if (current->val.tag == k_write) {
-        VG_(printf)("write():%d", current->val.val.write_val);
-    }
-    
-    print_int_list(current->read_deps);
+    if (current->read_deps != NULL)
+    {
+      // Print the tag and value based on the tag type
+      if (current->val.tag == k_mem)
+      {
+        // VG_(printf)("addr:%lu[%lu]", current->val.val.var.mem_addr, current->val.val.var.size);
+      }
+      else if (current->val.tag == k_temp)
+      {
+        // VG_(printf)("t(%u)", current->val.val.temp);
+      }
+      else if (current->val.tag == k_reg)
+      {
+        // VG_(printf)("reg(%d)", current->val.val.reg_val);
+      }
+      else if (current->val.tag == k_write)
+      {
+        // VG_(printf)("write():%d", current->val.val.write_val);
+        VG_(fprintf)(fp, "write():%d", current->val.val.write_val);
+      }
 
-    VG_(printf)("\n");
+      print_int_list(current->read_deps);
+      VG_(fprintf)(fp, "\n");
+    }
+
+    // VG_(printf)("\n");
     current = current->next;
   }
 
@@ -208,6 +224,14 @@ dep_val init_dep_val_with_temp(UInt temp) {
     return value;
 }
 
+// Initialize with register value
+dep_val init_dep_val_with_reg(Int reg) {
+    dep_val value;
+    value.tag = k_reg;
+    value.val.reg_val = reg;
+    return value;
+}
+
 /* ---------------------------- dep_node function ---------------------------- */
 read_dep_node* create_read_dep_node(dep_val val, int_node *read_deps){
   read_dep_node* new_node = (read_dep_node*)VG_(malloc)("Dependency node", sizeof(read_dep_node));
@@ -217,6 +241,55 @@ read_dep_node* create_read_dep_node(dep_val val, int_node *read_deps){
 
   return(new_node);
 }
+
+void read_dep_node_erasetmp(UInt tmp)
+{
+  read_dep_node *h = var_deps;
+  read_dep_node *t = h;
+
+  while(h){
+    if(h->val.tag == k_temp && h->val.val.temp == tmp){
+      t->next = h->next;
+      free_int_node_list(h->read_deps);
+      VG_(free)(h);
+      h = t;
+    }
+    t = h;
+    h = h->next;
+  }
+}
+
+void read_dep_node_erase_reg(Int reg)
+{
+  if(reg_deps == NULL) return;
+  read_dep_node *h = reg_deps;
+  read_dep_node *prev = NULL;
+
+  // VG_(printf)("erasing reg(%d) from list: \n", reg);
+  // print_read_dep_list(reg_deps);
+  // VG_(printf)("\n");
+
+  while(h){
+    if(h->val.tag == k_reg && h->val.val.reg_val == reg){
+      read_dep_node *del = h;
+      if(prev == NULL){
+        reg_deps = h->next;
+        h = reg_deps;
+      }
+      else{
+        prev->next = h->next;
+        h = h->next;
+      }
+      free_int_node_list(del->read_deps);
+      VG_(free)(del);
+    }
+    else {
+      prev = h;
+      h = h->next;
+    }
+  }
+}
+
 
 // Function to add an element to the list (backwards)
 read_dep_node *read_dep_node_prepend(read_dep_node *head, dep_val dependency, int_node *read_deps)
@@ -375,12 +448,12 @@ int_node* int_node_merge(int_node* head, int_node* l){
 
 int_node* find_read_dep_by_mem_addr(UWord target_addr)
 {
-  VG_(printf)("Finding read on target: 0x%X\n", target_addr);
+  // VG_(printf)("Finding read on target: 0x%X\n", target_addr);
   int_node *head = get_shadow_mem(target_addr);
-  VG_(printf)("Found 0x%X -> ", target_addr);
-  print_int_list(head);
-  VG_(printf)("|");
-  VG_(printf)("\n");
+  // VG_(printf)("Found 0x%X -> ", target_addr);
+  // print_int_list(head);
+  // VG_(printf)("|");
+  // VG_(printf)("\n");
 
   return deep_copy_int_node_list(head);
 
@@ -412,10 +485,10 @@ int_node* find_read_dep_by_mem_addr(UWord target_addr)
 int_node* find_read_dep_by_mem_addrs(UWord target_addr, UWord size){
   int_node *tmp = NULL;
   int_node *head = NULL;
-  VG_(printf)("Finding mem addr at 0x%X with size %lu\n", target_addr, size);
+  // VG_(printf)("Finding mem addr at 0x%X with size %lu\n", target_addr, size);
   for (UWord i = 0; i < size; i++){
     tmp = find_read_dep_by_mem_addr(target_addr+i);
-    VG_(printf)("Search is over, begin final merge\n");
+    // VG_(printf)("Search is over, begin final merge\n");
     head = int_node_merge(head, tmp);
   }
   // if(head != NULL)
@@ -436,6 +509,17 @@ int_node* find_read_dep_tmp(UInt tmp){
  return NULL;
 }
 
+int_node* find_read_dep_reg(Int reg){
+ read_dep_node *head = reg_deps;
+ while(head){
+  if(head->val.tag == k_reg && head->val.val.reg_val == reg){
+    return (head->read_deps);
+  }
+  head = head->next;
+ }
+ return NULL;
+}
+
 
 
 /* ============================================================================ */
@@ -446,13 +530,15 @@ int_node* find_read_dep_tmp(UInt tmp){
 
 static void instrument_assgn_tmp_load(UInt tmp_n, Addr addr)
 {
-  VG_(printf)("t(%u) = load:0x%X\n", tmp_n, addr);
+  // VG_(printf)("t(%u) = load:0x%X\n", tmp_n, addr);
 
   int_node *l = get_shadow_mem(addr);
   if (l == NULL) return;
 
   dep_val val = init_dep_val_with_temp(tmp_n);
-  // VG_(printf)("t(%u) = load:0x%X\n", tmp_n, addr);
+  // VG_(printf)("t(%u) = load:0x%X", tmp_n, addr);
+  // print_int_list(l);
+  // VG_(printf)("\n");
   l = deep_copy_int_node_list(l);
   var_deps = read_dep_node_append(var_deps, val, l);
 }
@@ -478,15 +564,30 @@ int_node* get_deps_tmp(UInt tmp)
   return (deep_copy_int_node_list(l));
 }
 
+int_node* get_deps_reg(Int reg)
+{
+  int_node *l = find_read_dep_reg(reg);
+  if (l == NULL) return NULL;
+
+  return (deep_copy_int_node_list(l));
+}
+
+static void instrument_assgn_tmp_const(UInt tmp)
+{
+  // VG_(printf)("t(%u) = UNOP Const\n", tmp);
+  read_dep_node_erasetmp(tmp);
+}
+
 static void instrument_assgn_tmp_unop(UInt tmp_lhs, UInt tmp_rhs)
 {
   int_node *l = get_deps_tmp(tmp_rhs);
   if (l == NULL) return;
 
-  VG_(printf)("t(%u) = UNOP t(%u)\n", tmp_lhs, tmp_rhs);
+  // VG_(printf)("t(%u) = UNOP t(%u)\n", tmp_lhs, tmp_rhs);
   dep_val val = init_dep_val_with_temp(tmp_lhs);
   var_deps = read_dep_node_prepend(var_deps, val, l);
 }
+
 static void instrument_assgn_tmp_binop(UInt tmp_lhs, UInt tmp1, UInt tmp2)
 {
   int_node *l1 = get_deps_tmp(tmp1);
@@ -494,7 +595,7 @@ static void instrument_assgn_tmp_binop(UInt tmp_lhs, UInt tmp1, UInt tmp2)
   int_node *l = int_node_merge(l1, l2);
   if(l == NULL) return;
 
-  VG_(printf)("t(%u) = t(%u), t(%u)\n", tmp_lhs, tmp1, tmp2);
+  // VG_(printf)("t(%u) = t(%u), t(%u)\n", tmp_lhs, tmp1, tmp2);
   dep_val val = init_dep_val_with_temp(tmp_lhs);
   var_deps = read_dep_node_prepend(var_deps, val, l);
 }
@@ -507,7 +608,7 @@ static void instrument_assgn_tmp_triop(UInt tmp_lhs, UInt tmp1, UInt tmp2, UInt 
   l = int_node_merge(l, l3);
   if(l == NULL) return;
 
-  VG_(printf)("t(%u) = t(%u), t(%u), t(%u)\n", tmp_lhs, tmp1, tmp2, tmp3);
+  // VG_(printf)("t(%u) = t(%u), t(%u), t(%u)\n", tmp_lhs, tmp1, tmp2, tmp3);
 
   dep_val val = init_dep_val_with_temp(tmp_lhs);
   var_deps = read_dep_node_prepend(var_deps, val, l);
@@ -523,7 +624,7 @@ static void instrument_assgn_tmp_qop(UInt tmp_lhs, UInt tmp1, UInt tmp2, UInt tm
   l = int_node_merge(l, l4);
   if(l == NULL) return;
 
-  VG_(printf)("t(%u) = t(%u), t(%u), t(%u), t(%u)\n", tmp_lhs, tmp1, tmp2, tmp3, tmp4);
+  // VG_(printf)("t(%u) = t(%u), t(%u), t(%u), t(%u)\n", tmp_lhs, tmp1, tmp2, tmp3, tmp4);
 
   dep_val val = init_dep_val_with_temp(tmp_lhs);
   l = deep_copy_int_node_list(l);
@@ -543,7 +644,7 @@ int_node* get_deps_mem (Addr m)
 static void instrument_store_const(Addr addr)
 {
 
-  VG_(printf)("ST(0x%X) = CONST\n", addr);
+  // VG_(printf)("ST(0x%X) = CONST\n", addr);
   set_shadow_mem(addr, NULL);
 }
 
@@ -551,78 +652,45 @@ static void instrument_store_tmp(Addr addr, UInt tmp)
 {
 
   int_node *l = get_deps_tmp(tmp);
-  VG_(printf)("ST(0x%X) = t(%u)\n", addr, tmp);
   if (l == NULL) return;
 
-  VG_(printf)("********** Found Dependency! ***********\n");
-  print_int_list(l);
+  // VG_(printf)("ST(0x%X) = t(%u)\n", addr, tmp);
+  // print_int_list(l);
   set_shadow_mem(addr, l);
 }
 
+static void instrument_put_tmp(Int reg, UInt tmp)
+{
+  int_node *l = get_deps_tmp(tmp);
+  if (l == NULL) return;
 
+  // VG_(printf)("PUT(0x%X) = t(%u)\n", reg, tmp);
+  // print_int_list(l);
+  read_dep_node_erase_reg(reg);
 
-/*
-int_node* *get_deps_expr(IRExpr *exp){
-  IRExpr **argv = NULL;
-  IRDirty *dirty = NULL;
-  int_node* deps = NULL;
+  dep_val val = init_dep_val_with_reg(reg);
+  reg_deps = read_dep_node_prepend(reg_deps, val, l);
 
-  int_node *tmp1, *tmp2, *tmp3, *tmp4;
-
-  switch (exp->tag)
-  {
-    case Iex_Binder:
-      break;
-    case Iex_Get:
-      break;
-    case Iex_GetI:
-      break;
-    case Iex_RdTmp:
-      deps = get_deps_tmp(exp->Iex.RdTmp.tmp);
-      break;
-    case Iex_Qop:
-      tmp1 = get_deps_expr(exp->Iex.Qop.details->arg1);
-      tmp2 = get_deps_expr(exp->Iex.Qop.details->arg2);
-      tmp3 = get_deps_expr(exp->Iex.Qop.details->arg3);
-      tmp4 = get_deps_expr(exp->Iex.Qop.details->arg4);
-      deps = int_node_merge(tmp1, tmp2);
-      deps = int_node_merge(deps, tmp3);
-      deps = int_node_merge(deps, tmp4);
-      break;
-    case Iex_Triop:
-      tmp1 = get_deps_expr(exp->Iex.Triop.details->arg1);
-      tmp2 = get_deps_expr(exp->Iex.Triop.details->arg2);
-      tmp3 = get_deps_expr(exp->Iex.Triop.details->arg3);
-      deps = int_node_merge(tmp1, tmp2);
-      deps = int_node_merge(deps, tmp3);
-      break;
-    case Iex_Binop:
-      tmp1 = get_deps_expr(exp->Iex.Binop.arg1);
-      tmp2 = get_deps_expr(exp->Iex.Binop.arg2);
-      deps = int_node_merge(tmp1, tmp2);
-      break;
-    case Iex_Unop:
-      deps = get_deps_expr(exp->Iex.Unop.arg);
-      break;
-    case Iex_Load:
-      // argv = mkIRExprVec_1(expr->Iex.Load.addr);
-      // dirty = unsafeIRDirty_0_N(1, "ta_ld", VG_(fnptr_to_fnentry)(instrument_load), argv);
-      // VG_(printf)("Load Instrumented\n");
-      break;
-    case Iex_ITE:
-      break;
-    case Iex_Const:
-      break;
-    case Iex_CCall:
-      break;
-    case Iex_VECRET:
-      break;
-    case Iex_GSPTR:
-      break;
-  }
-  return deps;
 }
-*/
+
+static void instrument_put_cnst(Int reg)
+{
+  // VG_(printf)("PUT(0x%X) = Const\n", reg);
+  read_dep_node_erase_reg(reg);
+}
+
+
+static void instrument_assgn_tmp_get(UInt tmp, Int reg)
+{
+  int_node *l = get_deps_reg(reg);
+  if (l == NULL) return;
+
+  // VG_(printf)("t(%u) = GET(0x%X)\n", tmp, reg);
+
+  dep_val val = init_dep_val_with_temp(tmp);
+  var_deps = read_dep_node_prepend(var_deps, val, l);
+
+}
 
 static Bool da_process_cmd_line_option(const HChar *arg)
 {
@@ -658,44 +726,6 @@ static void da_post_clo_init(void)
 
 }
 
-// It maybe helpful for your work
-static Int type2index(IRType ty)
-{
-  switch (ty)
-  {
-  case Ity_I1:
-    return 0;
-  case Ity_I8:
-    return 1;
-  case Ity_I16:
-    return 2;
-  case Ity_I32:
-    return 3;
-  case Ity_I64:
-    return 4;
-  case Ity_I128:
-    return 5;
-  case Ity_F32:
-    return 6;
-  case Ity_F64:
-    return 7;
-  case Ity_F128:
-    return 8;
-  case Ity_V128:
-    return 9;
-  case Ity_V256:
-    return 10;
-  case Ity_D32:
-    return 11;
-  case Ity_D64:
-    return 12;
-  case Ity_D128:
-    return 13;
-  default:
-    return 14;
-  }
-}
-
 static IRSB *da_instrument(VgCallbackClosure *closure,
                            IRSB *sbIn,
                            const VexGuestLayout *layout,
@@ -729,7 +759,6 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
                     VKI_O_CREAT | VKI_O_WRONLY | VKI_O_TRUNC,
                     VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IROTH);
   }
-  VG_(fprintf)(fp, "file written successfuly!");
 
   for (i = 0; i < sbIn->stmts_used; i++)
   {
@@ -748,7 +777,7 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
       if (VG_(get_fnname_if_entry)(ep, st->Ist.IMark.addr, &fnname))
       {
 
-        if (VG_(strcmp)(fnname, "main") == 0)
+        if (VG_(strcmp)(fnname, "read") == 0)
         {
           trace = True;
         }
@@ -772,9 +801,19 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
       IRExpr *e = IRExpr_Const(IRConst_U64(tmp));
       IRExpr *arg1, *arg2, *arg3, *arg4;
       switch(data->tag){
+        case Iex_RdTmp:
+          argv = mkIRExprVec_2(e, IRExpr_Const(IRConst_U64(data->Iex.RdTmp.tmp)));
+          dirty = unsafeIRDirty_0_N(2, "ta_ld", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_unop), argv);
+          addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+          break;
         case Iex_Load:
           argv = mkIRExprVec_2(e, data->Iex.Load.addr);
           dirty = unsafeIRDirty_0_N(2, "ta_ld", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_load), argv);
+          addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+          break;
+        case Iex_Get:
+          argv = mkIRExprVec_2(e, IRExpr_Const(IRConst_U64(data->Iex.Get.offset)));
+          dirty = unsafeIRDirty_0_N(2, "ta_ld", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_get), argv);
           addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
           break;
         case Iex_Unop:
@@ -784,10 +823,16 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
             dirty = unsafeIRDirty_0_N(2, "ta_unop", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_unop), argv);
             addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
           }
+          if(arg1->tag == Iex_Const){
+            argv = mkIRExprVec_1(e);
+            dirty = unsafeIRDirty_0_N(1, "ta_unop", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_const), argv);
+            addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+          }
           break;
         case Iex_Binop:
           arg1 = data->Iex.Binop.arg1;
           arg2 = data->Iex.Binop.arg2;
+          // Both Temporaries
           if(arg1->tag == Iex_RdTmp && arg2->tag == Iex_RdTmp){
             argv = mkIRExprVec_3(e,
                                  IRExpr_Const(IRConst_U64(arg1->Iex.RdTmp.tmp)),
@@ -796,6 +841,25 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
             dirty = unsafeIRDirty_0_N(3, "ta_binop", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_binop), argv);
             addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
           }
+          // arg1 is temporary, arg2 is const
+          else if(arg1->tag == Iex_RdTmp && arg2->tag == Iex_Const){
+            argv = mkIRExprVec_2(e, IRExpr_Const(IRConst_U64(arg1->Iex.RdTmp.tmp)));
+            dirty = unsafeIRDirty_0_N(2, "ta_unop", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_unop), argv);
+            addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+          }
+          // arg1 is const, arg2 is temporary
+          else if(arg1->tag == Iex_Const && arg2->tag == Iex_RdTmp){
+            argv = mkIRExprVec_2(e, IRExpr_Const(IRConst_U64(arg2->Iex.RdTmp.tmp)));
+            dirty = unsafeIRDirty_0_N(2, "ta_unop", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_unop), argv);
+            addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+          }
+          // both are const
+          else if(arg1->tag == Iex_Const && arg2->tag == Iex_Const){
+            argv = mkIRExprVec_1(e);
+            dirty = unsafeIRDirty_0_N(1, "ta_unop", VG_(fnptr_to_fnentry)(instrument_assgn_tmp_const), argv);
+            addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+          }
+          // rhs is temporary
           break;
         case Iex_Triop:
           arg1 = data->Iex.Triop.details->arg1;
@@ -855,9 +919,29 @@ static IRSB *da_instrument(VgCallbackClosure *closure,
       }
 
       break;
+    case Ist_Put:
+      if(!trace) break;
+      data = st->Ist.Put.data; // Temporary and Const
+      Int offset = st->Ist.Put.offset;
+      IRExpr *reg = IRExpr_Const(IRConst_U64(offset));
+
+      if(data->tag == Iex_RdTmp){
+        IRExpr *tmp = IRExpr_Const(IRConst_U64(data->Iex.RdTmp.tmp));
+        argv = mkIRExprVec_2(reg, tmp);
+        dirty = unsafeIRDirty_0_N(2, "ta_st_cnst", VG_(fnptr_to_fnentry)(instrument_put_tmp), argv);
+        addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+      }
+      else if(data->tag == Iex_Const){
+        argv = mkIRExprVec_1(reg);
+        dirty = unsafeIRDirty_0_N(1, "ta_st_cnst", VG_(fnptr_to_fnentry)(instrument_put_cnst), argv);
+        addStmtToIRSB(sbOut, IRStmt_Dirty(dirty));
+      }
+
+      break;
     default: break;
     }
     addStmtToIRSB(sbOut, st);
+    
     /*
     if (trace)
     {
@@ -879,10 +963,13 @@ static void da_fini(Int exitcode)
 {
 
   // VG_(printf)("Printing read_dep_list\n");
-  print_read_dep_list(var_deps);
+  // print_read_dep_list(reg_deps);
+  // print_read_dep_list(var_deps);
+  // print_read_dep_list(write_deps);
   print_read_dep_list(write_deps);
 
   // VG_(printf)("Before free var_deps\n");
+  free_read_dep_list(reg_deps);
   free_read_dep_list(var_deps);
   // VG_(printf)("Before write_deps\n");
   free_read_dep_list(write_deps);
@@ -900,46 +987,20 @@ static void ta_pre_call(ThreadId id, UInt syscallno, UWord *args, UInt nargs)
   {
     if (syscallno == __NR_read)
     {
-      // VG_(printf)("read call\n");
       read_n++;
-
-      /*
-      VG_(printf)("read( ");
-      for(int i = 0; i < nargs; i++)
-        VG_(printf)("%lu, ", args[i]);
-      VG_(printf)(" )\n");
-      */
-
-      // dep_val val = init_dep_val_with_mem_addr(args[1], args[2]);
-      // int_node *int_list = int_list_create(read_n);
-      // var_deps = prepend(var_deps, val, int_list);
-      VG_(printf)("Creating read (%d) dependency for memory 0x%X with size %lu\n", read_n, args[1], args[2]);
       for(int i = 0; i < args[2]; i++){
         int_node *int_list = int_list_create(read_n);
-        // VG_(printf)("Entering loop, creating dep for mem %lu\n", args[1] + i);
         set_shadow_mem(args[1]+i, int_list);
       }
     }
     if (syscallno == __NR_write)
     {
       write_n++;
-      /*
-      VG_(printf)("write( ");
-      for(int i = 0; i < nargs; i++)
-        VG_(printf)("%lu, ", args[i]);
-      VG_(printf)(" )\n");
-      */
 
-      // VG_(printf)("write call\n");
       // VG_(printf)("Finding read addr...\n");
       int_node *read_dep = find_read_dep_by_mem_addrs(args[1], args[2]);
-      // VG_(printf)("Initializing dep_val...\n");
       dep_val depval = init_dep_val_with_write(write_n);
-      // VG_(printf)("Adding info to write_deps...\n");
       write_deps = read_dep_node_append(write_deps, depval, read_dep);
-      // write_deps = read_dep_node_
-      /*
-      */
     }
   }
 }
