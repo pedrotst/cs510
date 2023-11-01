@@ -52,6 +52,8 @@ void PrintPath(std::list<BasicBlock *> path){
 
 void DiscoverPaths(std::list<BasicBlock *> path, BasicBlock *bb)
 {
+    if(std::count(path.begin(), path.end(), bb) > 2)
+        return;
     path.push_back(bb);
     // outs() << "entrou Func\n";
     for (Instruction &i : (*bb))
