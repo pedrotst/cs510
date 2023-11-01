@@ -1,0 +1,428 @@
+==2201634== depAnalysis, the normal minimal Valgrind tool for taint analysis
+==2201634== Copyright (C) 2002-2017, and GNU GPL'd, by Pedro Abreu. (jk, no copyright here)
+==2201634== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
+==2201634== Command: test10
+==2201634== 
+--2201634-- WARNING: unhandled amd64-linux syscall: 334
+--2201634-- You may be able to write your own handler.
+--2201634-- Read the file README_MISSING_SYSCALL_OR_IOCTL.
+--2201634-- Nevertheless we consider this a bug.  Please report
+--2201634-- it at http://valgrind.org/support/bug_reports.html.
+------ IMark(0x4986980, 4, 0) ------
+PUT(184) = 0x4986984:I64
+------ IMark(0x4986984, 8, 0) ------
+t5 = GET:I64(208)
+t4 = Add64(0x18:I64,t5)
+t7 = LDle:I32(t4)
+t20 = 32Uto64(t7)
+t6 = t20
+PUT(16) = t6
+------ IMark(0x498698C, 2, 0) ------
+t21 = 64to32(t6)
+t8 = t21
+PUT(144) = 0x13:I64
+t22 = 32Uto64(t8)
+t12 = t22
+PUT(152) = t12
+PUT(160) = 0x0:I64
+PUT(168) = 0x0:I64
+PUT(184) = 0x498698E:I64
+------ IMark(0x498698E, 2, 0) ------
+t25 = 64to32(t12)
+t24 = CmpEQ32(t25,0x0:I32)
+t23 = 1Uto64(t24)
+t18 = t23
+t26 = 64to1(t18)
+t13 = t26
+if (t13) { PUT(184) = 0x4986990:I64; exit-Boring } 
+------ IMark(0x4986990, 2, 0) ------
+PUT(24) = 0x4986992:I64
+Creating read (1) dependency for memory 0x10C01C with size 1
+------ IMark(0x4986992, 6, 0) ------
+t0 = GET:I64(16)
+PUT(144) = 0x8:I64
+PUT(152) = t0
+PUT(160) = 0xFFFFFFFFFFFFF000:I64
+PUT(168) = 0x0:I64
+PUT(184) = 0x4986998:I64
+------ IMark(0x4986998, 2, 0) ------
+t11 = CmpLE64U(t0,0xFFFFFFFFFFFFF000:I64)
+t10 = 1Uto64(t11)
+t8 = t10
+t12 = 64to1(t8)
+t3 = t12
+if (t3) { PUT(184) = 0x498699A:I64; exit-Boring } 
+------ IMark(0x498699A, 1, 0) ------
+t0 = GET:I64(48)
+t1 = LDle:I64(t0)
+t2 = Add64(t0,0x8:I64)
+PUT(48) = t2
+t3 = Sub64(t2,0x80:I64)
+====== AbiHint(t3, 128, t1) ======
+------ IMark(0x109221, 7, 0) ------
+t7 = LDle:I8(0x10C01E:I64)
+t6 = 8Uto32(t7)
+t5 = 32Uto64(t6)
+------ IMark(0x109228, 3, 0) ------
+t10 = 64to8(t5)
+t9 = 8Sto32(t10)
+t8 = 32Uto64(t9)
+PUT(32) = t8
+PUT(184) = 0x10922B:I64
+------ IMark(0x10922B, 7, 0) ------
+t14 = LDle:I8(0x10C01D:I64)
+t13 = 8Uto32(t14)
+t12 = 32Uto64(t13)
+------ IMark(0x109232, 3, 0) ------
+t17 = 64to8(t12)
+t16 = 8Sto32(t17)
+t15 = 32Uto64(t16)
+PUT(24) = t15
+PUT(184) = 0x109235:I64
+------ IMark(0x109235, 7, 0) ------
+t21 = LDle:I8(0x10C01C:I64)
+t20 = 8Uto32(t21)
+t19 = 32Uto64(t20)
+------ IMark(0x10923C, 3, 0) ------
+t24 = 64to8(t19)
+t23 = 8Sto32(t24)
+t22 = 32Uto64(t23)
+PUT(16) = t22
+------ IMark(0x10923F, 2, 0) ------
+t27 = 64to32(t15)
+t26 = 32Uto64(t27)
+PUT(64) = t26
+------ IMark(0x109241, 2, 0) ------
+t30 = 64to32(t22)
+t29 = 32Uto64(t30)
+PUT(72) = t29
+PUT(184) = 0x109243:I64
+------ IMark(0x109243, 5, 0) ------
+t33 = GET:I64(48)
+t32 = Sub64(t33,0x8:I64)
+PUT(48) = t32
+STle(t32) = 0x109248:I64
+t34 = Sub64(t32,0x80:I64)
+====== AbiHint(t34, 128, 0x1091A4:I64) ======
+------ IMark(0x1091A4, 4, 0) ------
+PUT(184) = 0x1091A8:I64
+------ IMark(0x1091A8, 1, 0) ------
+t36 = GET:I64(56)
+t51 = Sub64(t32,0x8:I64)
+PUT(48) = t51
+STle(t51) = t36
+------ IMark(0x1091A9, 3, 0) ------
+PUT(56) = t51
+PUT(184) = 0x1091AC:I64
+------ IMark(0x1091AC, 3, 0) ------
+t54 = Add64(t51,0xFFFFFFFFFFFFFFFC:I64)
+t56 = 64to32(t29)
+STle(t54) = t56
+PUT(184) = 0x1091AF:I64
+------ IMark(0x1091AF, 3, 0) ------
+t58 = Add64(t51,0xFFFFFFFFFFFFFFF8:I64)
+t60 = 64to32(t26)
+STle(t58) = t60
+PUT(184) = 0x1091B2:I64
+------ IMark(0x1091B2, 3, 0) ------
+t62 = Add64(t51,0xFFFFFFFFFFFFFFF4:I64)
+t64 = 64to32(t8)
+STle(t62) = t64
+PUT(184) = 0x1091B5:I64
+------ IMark(0x1091B5, 3, 0) ------
+t66 = Add64(t51,0xFFFFFFFFFFFFFFFC:I64)
+t69 = LDle:I32(t66)
+t68 = 32Uto64(t69)
+PUT(32) = t68
+PUT(184) = 0x1091B8:I64
+------ IMark(0x1091B8, 3, 0) ------
+t70 = Add64(t51,0xFFFFFFFFFFFFFFF8:I64)
+t73 = LDle:I32(t70)
+t72 = 32Uto64(t73)
+------ IMark(0x1091BB, 2, 0) ------
+t74 = 64to32(t72)
+t76 = 64to32(t68)
+t43 = Add32(t74,t76)
+PUT(144) = 0x3:I64
+t78 = 32Uto64(t74)
+PUT(152) = t78
+t79 = 32Uto64(t76)
+PUT(160) = t79
+PUT(168) = 0x0:I64
+t80 = 32Uto64(t43)
+PUT(16) = t80
+PUT(184) = 0x1091BD:I64
+------ IMark(0x1091BD, 1, 0) ------
+t46 = LDle:I64(t51)
+t81 = Add64(t51,0x8:I64)
+PUT(48) = t81
+PUT(56) = t46
+PUT(184) = 0x1091BE:I64
+------ IMark(0x1091BE, 1, 0) ------
+t49 = LDle:I64(t81)
+t50 = Add64(t81,0x8:I64)
+PUT(48) = t50
+t82 = Sub64(t50,0x80:I64)
+====== AbiHint(t82, 128, t49) ======
+------ IMark(0x109248, 6, 0) ------
+t7 = GET:I64(16)
+t6 = 64to8(t7)
+STle(0x10C01F:I64) = t6
+PUT(184) = 0x10924E:I64
+------ IMark(0x10924E, 7, 0) ------
+t10 = LDle:I8(0x10C01E:I64)
+t9 = 8Uto32(t10)
+t8 = 32Uto64(t9)
+------ IMark(0x109255, 3, 0) ------
+t13 = 64to8(t8)
+t12 = 8Sto32(t13)
+t11 = 32Uto64(t12)
+PUT(32) = t11
+PUT(184) = 0x109258:I64
+------ IMark(0x109258, 7, 0) ------
+t17 = LDle:I8(0x10C01D:I64)
+t16 = 8Uto32(t17)
+t15 = 32Uto64(t16)
+------ IMark(0x10925F, 3, 0) ------
+t20 = 64to8(t15)
+t19 = 8Sto32(t20)
+t18 = 32Uto64(t19)
+PUT(24) = t18
+PUT(184) = 0x109262:I64
+------ IMark(0x109262, 7, 0) ------
+t24 = LDle:I8(0x10C01C:I64)
+t23 = 8Uto32(t24)
+t22 = 32Uto64(t23)
+------ IMark(0x109269, 3, 0) ------
+t27 = 64to8(t22)
+t26 = 8Sto32(t27)
+t25 = 32Uto64(t26)
+PUT(16) = t25
+------ IMark(0x10926C, 2, 0) ------
+t30 = 64to32(t18)
+t29 = 32Uto64(t30)
+PUT(64) = t29
+------ IMark(0x10926E, 2, 0) ------
+t33 = 64to32(t25)
+t32 = 32Uto64(t33)
+PUT(72) = t32
+PUT(184) = 0x109270:I64
+------ IMark(0x109270, 5, 0) ------
+t36 = GET:I64(48)
+t35 = Sub64(t36,0x8:I64)
+PUT(48) = t35
+STle(t35) = 0x109275:I64
+t37 = Sub64(t35,0x80:I64)
+====== AbiHint(t37, 128, 0x109189:I64) ======
+------ IMark(0x109189, 4, 0) ------
+PUT(184) = 0x10918D:I64
+------ IMark(0x10918D, 1, 0) ------
+t39 = GET:I64(56)
+t54 = Sub64(t35,0x8:I64)
+PUT(48) = t54
+STle(t54) = t39
+------ IMark(0x10918E, 3, 0) ------
+PUT(56) = t54
+PUT(184) = 0x109191:I64
+------ IMark(0x109191, 3, 0) ------
+t57 = Add64(t54,0xFFFFFFFFFFFFFFFC:I64)
+t59 = 64to32(t32)
+STle(t57) = t59
+PUT(184) = 0x109194:I64
+------ IMark(0x109194, 3, 0) ------
+t61 = Add64(t54,0xFFFFFFFFFFFFFFF8:I64)
+t63 = 64to32(t29)
+STle(t61) = t63
+PUT(184) = 0x109197:I64
+------ IMark(0x109197, 3, 0) ------
+t65 = Add64(t54,0xFFFFFFFFFFFFFFF4:I64)
+t67 = 64to32(t11)
+STle(t65) = t67
+PUT(184) = 0x10919A:I64
+------ IMark(0x10919A, 3, 0) ------
+t69 = Add64(t54,0xFFFFFFFFFFFFFFF8:I64)
+t72 = LDle:I32(t69)
+t71 = 32Uto64(t72)
+PUT(32) = t71
+PUT(184) = 0x10919D:I64
+------ IMark(0x10919D, 3, 0) ------
+t73 = Add64(t54,0xFFFFFFFFFFFFFFF4:I64)
+t76 = LDle:I32(t73)
+t75 = 32Uto64(t76)
+------ IMark(0x1091A0, 2, 0) ------
+t77 = 64to32(t75)
+t79 = 64to32(t71)
+t46 = Add32(t77,t79)
+PUT(144) = 0x3:I64
+t81 = 32Uto64(t77)
+PUT(152) = t81
+t82 = 32Uto64(t79)
+PUT(160) = t82
+PUT(168) = 0x0:I64
+t83 = 32Uto64(t46)
+PUT(16) = t83
+PUT(184) = 0x1091A2:I64
+------ IMark(0x1091A2, 1, 0) ------
+t49 = LDle:I64(t54)
+t84 = Add64(t54,0x8:I64)
+PUT(48) = t84
+PUT(56) = t49
+PUT(184) = 0x1091A3:I64
+------ IMark(0x1091A3, 1, 0) ------
+t52 = LDle:I64(t84)
+t53 = Add64(t84,0x8:I64)
+PUT(48) = t53
+t85 = Sub64(t53,0x80:I64)
+====== AbiHint(t85, 128, t52) ======
+------ IMark(0x109275, 6, 0) ------
+t6 = GET:I64(16)
+t5 = 64to8(t6)
+STle(0x10C020:I64) = t5
+PUT(184) = 0x10927B:I64
+------ IMark(0x10927B, 6, 0) ------
+t8 = LDle:I32(0x10C018:I64)
+t7 = 32Uto64(t8)
+PUT(16) = t7
+------ IMark(0x109281, 5, 0) ------
+PUT(32) = 0x1:I64
+------ IMark(0x109286, 7, 0) ------
+PUT(24) = 0x10C01F:I64
+------ IMark(0x10928D, 3, 0) ------
+PUT(64) = 0x10C01F:I64
+------ IMark(0x109290, 2, 0) ------
+t12 = 64to32(t7)
+t11 = 32Uto64(t12)
+PUT(72) = t11
+PUT(184) = 0x109292:I64
+------ IMark(0x109292, 5, 0) ------
+t15 = GET:I64(48)
+t14 = Sub64(t15,0x8:I64)
+PUT(48) = t14
+STle(t14) = 0x109297:I64
+t16 = Sub64(t14,0x80:I64)
+====== AbiHint(t16, 128, 0x109070:I64) ======
+------ IMark(0x109070, 4, 0) ------
+PUT(184) = 0x109074:I64
+------ IMark(0x109074, 7, 0) ------
+t20 = LDle:I64(0x10BFC0:I64)
+------ IMark(0x4986A20, 4, 0) ------
+PUT(184) = 0x4986A24:I64
+------ IMark(0x4986A24, 8, 0) ------
+t5 = GET:I64(208)
+t4 = Add64(0x18:I64,t5)
+t7 = LDle:I32(t4)
+t20 = 32Uto64(t7)
+t6 = t20
+PUT(16) = t6
+------ IMark(0x4986A2C, 2, 0) ------
+t21 = 64to32(t6)
+t8 = t21
+PUT(144) = 0x13:I64
+t22 = 32Uto64(t8)
+t12 = t22
+PUT(152) = t12
+PUT(160) = 0x0:I64
+PUT(168) = 0x0:I64
+PUT(184) = 0x4986A2E:I64
+------ IMark(0x4986A2E, 2, 0) ------
+t25 = 64to32(t12)
+t24 = CmpEQ32(t25,0x0:I32)
+t23 = 1Uto64(t24)
+t18 = t23
+t26 = 64to1(t18)
+t13 = t26
+if (t13) { PUT(184) = 0x4986A30:I64; exit-Boring } 
+------ IMark(0x4986A30, 5, 0) ------
+PUT(16) = 0x1:I64
+------ IMark(0x4986A35, 2, 0) ------
+PUT(24) = 0x4986A37:I64
+Creating write (1) dep
+Finding read on target: 0x10C01F
+Found 0x10C01F ->  read():1|
+------ IMark(0x4986A37, 6, 0) ------
+t0 = GET:I64(16)
+PUT(144) = 0x8:I64
+PUT(152) = t0
+PUT(160) = 0xFFFFFFFFFFFFF000:I64
+PUT(168) = 0x0:I64
+PUT(184) = 0x4986A3D:I64
+------ IMark(0x4986A3D, 2, 0) ------
+t11 = CmpLE64U(t0,0xFFFFFFFFFFFFF000:I64)
+t10 = 1Uto64(t11)
+t8 = t10
+t12 = 64to1(t8)
+t3 = t12
+if (t3) { PUT(184) = 0x4986A3F:I64; exit-Boring } 
+------ IMark(0x4986A3F, 1, 0) ------
+t0 = GET:I64(48)
+t1 = LDle:I64(t0)
+t2 = Add64(t0,0x8:I64)
+PUT(48) = t2
+t3 = Sub64(t2,0x80:I64)
+====== AbiHint(t3, 128, t1) ======
+------ IMark(0x109297, 6, 0) ------
+t5 = LDle:I32(0x10C018:I64)
+t4 = 32Uto64(t5)
+PUT(16) = t4
+------ IMark(0x10929D, 5, 0) ------
+PUT(32) = 0x1:I64
+------ IMark(0x1092A2, 7, 0) ------
+PUT(24) = 0x10C020:I64
+------ IMark(0x1092A9, 3, 0) ------
+PUT(64) = 0x10C020:I64
+------ IMark(0x1092AC, 2, 0) ------
+t9 = 64to32(t4)
+t8 = 32Uto64(t9)
+PUT(72) = t8
+PUT(184) = 0x1092AE:I64
+------ IMark(0x1092AE, 5, 0) ------
+t12 = GET:I64(48)
+t11 = Sub64(t12,0x8:I64)
+PUT(48) = t11
+STle(t11) = 0x1092B3:I64
+t13 = Sub64(t11,0x80:I64)
+====== AbiHint(t13, 128, 0x109070:I64) ======
+------ IMark(0x109070, 4, 0) ------
+PUT(184) = 0x109074:I64
+------ IMark(0x109074, 7, 0) ------
+t17 = LDle:I64(0x10BFC0:I64)
+Creating write (2) dep
+Finding read on target: 0x10C020
+Found 0x10C020 ->  read():1|
+------ IMark(0x1092B3, 5, 0) ------
+PUT(16) = 0x0:I64
+PUT(184) = 0x1092B8:I64
+------ IMark(0x1092B8, 1, 0) ------
+t1 = GET:I64(48)
+t0 = LDle:I64(t1)
+t6 = Add64(t1,0x8:I64)
+PUT(48) = t6
+PUT(56) = t0
+PUT(184) = 0x1092B9:I64
+------ IMark(0x1092B9, 1, 0) ------
+t3 = LDle:I64(t6)
+t4 = Add64(t6,0x8:I64)
+PUT(48) = t4
+t7 = Sub64(t4,0x80:I64)
+====== AbiHint(t7, 128, t3) ======
+------ IMark(0x489BD90, 2, 0) ------
+t4 = GET:I64(16)
+t3 = 64to32(t4)
+t2 = 32Uto64(t3)
+PUT(72) = t2
+PUT(184) = 0x489BD92:I64
+------ IMark(0x489BD92, 5, 0) ------
+t6 = GET:I64(48)
+t5 = Sub64(t6,0x8:I64)
+PUT(48) = t5
+STle(t5) = 0x489BD97:I64
+t7 = Sub64(t5,0x80:I64)
+====== AbiHint(t7, 128, 0x48B75F0:I64) ======
+==2201634== 
+--------- Printing registers --------- 
+reg(152) read():1
+reg(72) read():1
+--------- Printing temps --------- 
+--------- Printing writes --------- 
+write():1 read():1
+write():2 read():1

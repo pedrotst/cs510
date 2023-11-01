@@ -1,0 +1,57 @@
+==1580256== depAnalysis, the normal minimal Valgrind tool for taint analysis
+==1580256== Copyright (C) 2002-2017, and GNU GPL'd, by Pedro Abreu. (jk, no copyright here)
+==1580256== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
+==1580256== Command: test0
+==1580256== 
+--1580256-- WARNING: unhandled amd64-linux syscall: 334
+--1580256-- You may be able to write your own handler.
+--1580256-- Read the file README_MISSING_SYSCALL_OR_IOCTL.
+--1580256-- Nevertheless we consider this a bug.  Please report
+--1580256-- it at http://valgrind.org/support/bug_reports.html.
+------ IMark(0x109129, 4, 0) ------
+PUT(184) = 0x10912D:I64
+------ IMark(0x10912D, 1, 0) ------
+t0 = GET:I64(56)
+t10 = GET:I64(48)
+t9 = Sub64(t10,0x8:I64)
+PUT(48) = t9
+STle(t9) = t0
+------ IMark(0x10912E, 3, 0) ------
+PUT(56) = t9
+PUT(184) = 0x109131:I64
+------ IMark(0x109131, 7, 0) ------
+t12 = Add64(t9,0xFFFFFFFFFFFFFFF8:I64)
+STle(t12) = 0x27:I32
+PUT(184) = 0x109138:I64
+------ IMark(0x109138, 7, 0) ------
+t14 = Add64(t9,0xFFFFFFFFFFFFFFFC:I64)
+STle(t14) = 0x1:I32
+------ IMark(0x10913F, 5, 0) ------
+PUT(16) = 0x0:I64
+PUT(184) = 0x109144:I64
+------ IMark(0x109144, 1, 0) ------
+t4 = LDle:I64(t9)
+t17 = Add64(t9,0x8:I64)
+PUT(48) = t17
+PUT(56) = t4
+PUT(184) = 0x109145:I64
+------ IMark(0x109145, 1, 0) ------
+t7 = LDle:I64(t17)
+t8 = Add64(t17,0x8:I64)
+PUT(48) = t8
+t18 = Sub64(t8,0x80:I64)
+====== AbiHint(t18, 128, t7) ======
+------ IMark(0x489BD90, 2, 0) ------
+t4 = GET:I64(16)
+t3 = 64to32(t4)
+t2 = 32Uto64(t3)
+PUT(72) = t2
+PUT(184) = 0x489BD92:I64
+------ IMark(0x489BD92, 5, 0) ------
+t6 = GET:I64(48)
+t5 = Sub64(t6,0x8:I64)
+PUT(48) = t5
+STle(t5) = 0x489BD97:I64
+t7 = Sub64(t5,0x80:I64)
+====== AbiHint(t7, 128, 0x48B75F0:I64) ======
+==1580256== 
