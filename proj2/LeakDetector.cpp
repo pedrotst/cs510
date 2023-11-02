@@ -85,9 +85,12 @@ void print_aliases(std::map<std::string, std::string> aliases){
 
 bool MemoryLeakDetection(std::list<BasicBlock *> path)
 {
-    std::map<std::string, Instruction*> malloc_vars;
-    malloc_vars.clear();
-    std::map<std::string, std::string> aliases;
+
+    int malloc_id = 0;
+    // List of all mallocs
+    std::vector<Instruction*> mallocs;
+    // Variable -> index where that variable was mallocd
+    std::map<std::string, int> malloc_vars;
     for (auto bb: path) {
         for (Instruction& i : *bb) {
 
@@ -101,7 +104,11 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
                     if(nextStore){
                         std::string alias = nextStore->getOperand(1)->getName().str();
                         std::string var = LI->getOperand(0)->getName().str();
-                        aliases[alias] = var;
+
+                        auto search = malloc_vars.find(var);
+                        if(search != malloc_vars.end()){
+                            malloc_vars[alias] = search->second;
+                        }
                     }
                 }
             }
@@ -126,7 +133,9 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
 
                     if(nextStore){
                         std::string var = nextStore->getOperand(1)->getName().str();
-                        malloc_vars.insert({var, &i});
+                        mallocs.push_back(&i);
+                        malloc_vars.insert({var, malloc_id});
+                        malloc_id++;
 
                         // Write your code
                         if(DEBUG){
@@ -142,19 +151,21 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
 
                     if(previousLI){
                         std::string var = previousLI->getOperand(0)->getName().str();
+                        auto search = malloc_vars.find(var);
+                        if(search != malloc_vars.end()){
+                            int id = search->second;
+                            mallocs[id]= NULL;
+                        }
 
-                        // erase var, or it's alias
-                        // print_aliases(aliases);
-                        do{
-                            // outs() << var << "\n";
-                            int n = malloc_vars.erase(var);
-                            // didn't erase var
-                            if(n == 0) {
-                                if (aliases.count(var) < 1)
-                                    break;
-                                var = aliases.at(var);
-                            } else break;
-                        } while(1);
+                        // do{
+                        //     int n = malloc_vars.erase(var);
+                        //     // didn't erase var
+                        //     if(n == 0) {
+                        //         if (aliases.count(var) < 1)
+                        //             break;
+                        //         var = aliases.at(var);
+                        //     } else break;
+                        // } while(1);
 
                         if(DEBUG){
                             // outs() << *previousLI << "\n";
@@ -172,10 +183,12 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
     /*
      * return True of False 
      */
-    if(malloc_vars.empty())
-        return false;
+    for(auto i : mallocs){
+        if(i != NULL)
+            return true;
+    }
 
-    return true;
+    return false;
 }
 
 
