@@ -83,14 +83,33 @@ void print_aliases(std::map<std::string, std::string> aliases){
     outs() << "\n";
 }
 
+void print_malloc_structs(std::map<std::string, std::map<int, int>> malloc_structs){
+    outs() << "----------------- Malloc structs ------------------------ \n";
+    for (auto vars : malloc_structs){
+        outs() << vars.first << " {\n";
+        for (auto n : vars.second){
+            outs() << "\t" << n.first << " - " << n.second << ";\n";
+        }
+        outs() << "}\n";
+
+    }
+    outs() << "--------------------------------------------------------- \n\n";
+}
+
+std::string gep_uid(std::string s, int i)
+{
+    return s + "." + std::to_string(i);
+}
+
 bool MemoryLeakDetection(std::list<BasicBlock *> path)
 {
-
     int malloc_id = 0;
     // List of all mallocs
     std::vector<Instruction*> mallocs;
     // Variable -> index where that variable was mallocd
     std::map<std::string, int> malloc_vars;
+    // Map structvaname to the index of the struct to the index of the malloc
+    std::map<std::string, std::map<int, int>> malloc_structs;
     for (auto bb: path) {
         for (Instruction& i : *bb) {
 
@@ -116,32 +135,80 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
 
             StoreInst *SI = dyn_cast<StoreInst>(&i);
             if(SI){ 
-                
-                // Write your code 
-
-                // Example of accessing to getOperand()
-                if(DEBUG){
-                    //outs() << "[DEBUG][STORE] "  << i << "\n";
-                    //outs() << "[DEBUG][STORE] "  << SI->getOperand(1) << "\n";
+                /*
+                ConstantExpr *CE = dyn_cast<ConstantExpr>(SI->getOperand(1));
+                if(CE){
+                    GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(CE->getAsInstruction(&i));
+                    if(GEPI){
+                        if(DEBUG){
+                            // outs() << *GEPI << "\n";
+                        }
+                    }
+                    // Example of accessing to getOperand()
                 }
+                */
             }
              
             CallInst * CI = dyn_cast<CallInst>(&i);
             if (CI){ 
+                if (CI->getCalledFunction()->getName().find("llvm.memcpy.p0i8.p0i8.i64") != std::string::npos) {
+                    ConstantExpr *lhs = dyn_cast<ConstantExpr>(CI->getOperand(0));
+                    ConstantExpr *rhs = dyn_cast<ConstantExpr>(CI->getOperand(1));
+                    if(lhs && rhs && lhs->getOpcode() == Instruction::BitCast && rhs->getOpcode() == Instruction::BitCast){
+                        std::string lhsOp = lhs->getOperand(0)->getName().str();
+                        std::string rhsOp = rhs->getOperand(0)->getName().str();
+                        malloc_structs[lhsOp] = malloc_structs[rhsOp];
+                        if(DEBUG){
+                            outs() << "memcpy: "<< *CI << "\n";
+                            outs() << "lhs: "<< lhsOp << "\n";
+                            outs() << "rhs: "<< rhsOp << "\n";
+                        }
+                    }
+                    
+                }
                 if (CI->getCalledFunction()->getName().find("malloc") != std::string::npos) {
                     StoreInst *nextStore = dyn_cast<StoreInst>((&i)->getNextNonDebugInstruction());
 
                     if(nextStore){
-                        std::string var = nextStore->getOperand(1)->getName().str();
-                        mallocs.push_back(&i);
-                        malloc_vars.insert({var, malloc_id});
-                        malloc_id++;
+                        ConstantExpr *CE = dyn_cast<ConstantExpr>(nextStore->getOperand(1));
+                        if(CE){
+                            GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(CE->getAsInstruction(&i));
+                            if(GEPI){
+                                std::string varname = GEPI->getOperand(0)->getName().str();
+                                auto index = GEPI->getOperand(2);
+                                if (ConstantInt *I = dyn_cast<ConstantInt>(index))
+                                {
+                                    int indexValue = I->getZExtValue();
+                                    // auto key = gep_uid(varname, indexValue);
+                                    auto m = malloc_structs[varname];
+                                    m.insert({indexValue, malloc_id});
+                                    malloc_structs[varname] = m;
+                                    mallocs.push_back(&i);
+                                    malloc_id++;
+                                    // ...
+                                    if (DEBUG)
+                                    {
+                                        outs() << *GEPI << "\n";
+                                        // outs() << "GEP operand we want: " << indexValue << "\n";
+                                        // outs() << "GEP variable we want: " << varname << "\n";
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            std::string var = nextStore->getOperand(1)->getName().str();
+                            mallocs.push_back(&i);
+                            malloc_vars.insert({var, malloc_id});
+                            malloc_id++;
 
-                        // Write your code
-                        if(DEBUG){
-                            // outs() << i << "\n";
-                            // outs() << *nextStore << "\n";
-                            // outs() << var << "\n";
+                            // Write your code
+                            if (DEBUG)
+                            {
+                                // outs() << i << "\n";
+                                outs() << *nextStore << "\n";
+                                // outs() << var << "\n";
+                            }
                         }
                     }
 
@@ -157,16 +224,6 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
                             mallocs[id]= NULL;
                         }
 
-                        // do{
-                        //     int n = malloc_vars.erase(var);
-                        //     // didn't erase var
-                        //     if(n == 0) {
-                        //         if (aliases.count(var) < 1)
-                        //             break;
-                        //         var = aliases.at(var);
-                        //     } else break;
-                        // } while(1);
-
                         if(DEBUG){
                             // outs() << *previousLI << "\n";
                             // outs() << var << "\n";
@@ -179,6 +236,10 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
             }
          
         }
+    }
+
+    if(DEBUG){
+        print_malloc_structs(malloc_structs);
     }
     /*
      * return True of False 
