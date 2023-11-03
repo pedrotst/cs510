@@ -159,9 +159,9 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
                         std::string rhsOp = rhs->getOperand(0)->getName().str();
                         malloc_structs[lhsOp] = malloc_structs[rhsOp];
                         if(DEBUG){
-                            outs() << "memcpy: "<< *CI << "\n";
-                            outs() << "lhs: "<< lhsOp << "\n";
-                            outs() << "rhs: "<< rhsOp << "\n";
+                            // outs() << "memcpy: "<< *CI << "\n";
+                            // outs() << "lhs: "<< lhsOp << "\n";
+                            // outs() << "rhs: "<< rhsOp << "\n";
                         }
                     }
                     
@@ -188,7 +188,7 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
                                     // ...
                                     if (DEBUG)
                                     {
-                                        outs() << *GEPI << "\n";
+                                        // outs() << *GEPI << "\n";
                                         // outs() << "GEP operand we want: " << indexValue << "\n";
                                         // outs() << "GEP variable we want: " << varname << "\n";
                                     }
@@ -206,31 +206,68 @@ bool MemoryLeakDetection(std::list<BasicBlock *> path)
                             if (DEBUG)
                             {
                                 // outs() << i << "\n";
-                                outs() << *nextStore << "\n";
+                                // outs() << *nextStore << "\n";
                                 // outs() << var << "\n";
                             }
                         }
                     }
 
                 }
+                // FREE
                 if (CI->getCalledFunction()->getName().find("free") != std::string::npos) {
                     LoadInst *previousLI = dyn_cast<LoadInst>((&i)->getPrevNonDebugInstruction());
 
                     if(previousLI){
-                        std::string var = previousLI->getOperand(0)->getName().str();
-                        auto search = malloc_vars.find(var);
-                        if(search != malloc_vars.end()){
-                            int id = search->second;
-                            mallocs[id]= NULL;
+                        ConstantExpr *CE = dyn_cast<ConstantExpr>(previousLI->getOperand(0));
+                        if (CE)
+                        {
+                            GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(CE->getAsInstruction(&i));
+                            // FREE struct element
+                            if (GEPI)
+                            {
+                                std::string var = GEPI->getOperand(0)->getName().str();
+                                auto index = GEPI->getOperand(2);
+                                if (ConstantInt *I = dyn_cast<ConstantInt>(index))
+                                {
+                                    int indexValue = I->getZExtValue();
+                                    auto search = malloc_structs.find(var);
+                                    if (search != malloc_structs.end())
+                                    {
+                                        auto id_search = (search->second).find(indexValue);
+                                        if (id_search != (search->second).end())
+                                        {
+                                            int id = id_search->second;
+                                            mallocs[id] = NULL;
+                                        }
+                                    }
+                                    if (DEBUG)
+                                    {
+                                        // outs() << *previousLI << "\n";
+                                        // outs() << i << "\n";
+                                        // outs() << "GEPI: " << *GEPI << "\n";
+                                        // outs() << "var: " << var << "\n";
+                                    }
+                                }
+                            }
                         }
+                        else {
+                            std::string var = previousLI->getOperand(0)->getName().str();
+                            auto search = malloc_vars.find(var);
+                            if (search != malloc_vars.end())
+                            {
+                                int id = search->second;
+                                mallocs[id] = NULL;
+                            }
 
-                        if(DEBUG){
-                            // outs() << *previousLI << "\n";
-                            // outs() << var << "\n";
-                            // outs() << i << "\n";
+                            if (DEBUG)
+                            {
+                                // outs() << *previousLI << "\n";
+                                // outs() << i << "\n";
+                                // outs() << "op: " << *op << "\n";
+                                // outs() << "var: " << var << "\n";
+                            }
                         }
                     }
-                    // Write your code
                     
                 }           
             }
